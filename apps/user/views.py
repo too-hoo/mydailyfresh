@@ -212,7 +212,15 @@ class LoginView(View):
 
     def get(self, request):
         '''显示登录页面'''
-        return render(request, "login.html")
+        # 判断是否记住密码
+        if 'username' in request.COOKIES:
+            username = request.COOKIES.get('username') # request.COOKIES['username']
+            checked = 'checked'
+        else:
+            username = ''
+            checked = ''
+        # 返回对应的值, 页面通过模板进行显示
+        return render(request, "login.html", {'username':username, 'checked':checked})
 
     def post(self, request):
         '''登录校验'''
@@ -233,10 +241,32 @@ class LoginView(View):
                 # print("User is valid, active and authenticated")
                 login(request, user)  # 登录并记录用户的登录状态
 
+                response = redirect(reverse('goods:index')) # HttpResponseRedirect
+
+                # 设置cookie,需要通过HttpResponse类的实例对象,set_cookie
+                # HttpResponseRedirect JsonResponse
+
+                # 判断是否需要记住用户名
+                remember = request.POST.get('remember')
+                if remember == 'on':
+                    response.set_cookie('username', username, max_age=7 * 24 * 3600)
+                else:
+                    response.delete_cookie('username')
+
                 # 跳转到首页
-                return redirect(reverse('goods:index'))
+                return response
             else:
                 # print("The passwoed is valid, but the account has been disabled!")
                 return render(request, 'login.html', {'errmsg': '账户未激活'})
         else:
             return render(request, 'login.html', {'errmsg': '用户名或密码错误或者账户未激活'})
+
+
+
+
+
+
+
+
+
+
