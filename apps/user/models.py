@@ -15,12 +15,14 @@ class User(AbstractUser, BaseModel):  # 继承抽像用户类和自定义的三�
 
 class AddressManager(models.Manager):
     """地址模型管理器类"""
-
+    # 自定义管理器类的使用的两种方法:改变原来的查询结果集;封装方法
     # 1. 改变原有查询的结果集:all()
     # 2. 封装方法:用户操作模型类对应的数据表(增删查改)
 
+
     def get_default_address(self, user):
         # 获取用户的默认收货地址
+        # self.model:获取self对象所在的模型类,self本身就是AddressManager
         try:
             address = self.get(user=user, is_default=True)
         except self.model.DoesNotExist:
@@ -38,7 +40,7 @@ class Address(BaseModel):
     phone = models.CharField(max_length=11, verbose_name='联系电话')
     is_default = models.BooleanField(default=False, verbose_name='是否默认')
 
-    # 自定义一个模型管理器类
+    # 自定义一个模型管理器类,这个是自定义的操作
     objects = AddressManager()
 
     # 元类中定义表格名称

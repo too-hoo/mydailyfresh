@@ -6,10 +6,14 @@ from django.conf import settings
 from django.http import HttpResponse  # 返回响应
 from django.contrib.auth import authenticate, login, logout  # 内置的验证登录登出函数模块
 
-from apps.user.models import User
+from apps.user.models import User, Address
+from apps.goods.models import GoodsSKU  # 具体的商品
 from celery_tasks.tasks import send_register_active_email
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from itsdangerous import SignatureExpired  # 口令过期异常
+from django_redis import get_redis_connection
+
+from utils.mixin import LoginRequiredMixin
 
 import re
 
@@ -214,13 +218,13 @@ class LoginView(View):
         '''显示登录页面'''
         # 判断是否记住密码
         if 'username' in request.COOKIES:
-            username = request.COOKIES.get('username') # request.COOKIES['username']
+            username = request.COOKIES.get('username')  # request.COOKIES['username']
             checked = 'checked'
         else:
             username = ''
             checked = ''
         # 返回对应的值, 页面通过模板进行显示
-        return render(request, "login.html", {'username':username, 'checked':checked})
+        return render(request, "login.html", {'username': username, 'checked': checked})
 
     def post(self, request):
         '''登录校验'''
@@ -241,7 +245,12 @@ class LoginView(View):
                 # print("User is valid, active and authenticated")
                 login(request, user)  # 登录并记录用户的登录状态
 
-                response = redirect(reverse('goods:index')) # HttpResponseRedirect
+                # 获取登陆之后所要跳转的地址,优化用户体验,在地址栏里面的是使用get方法进行请求的.
+                # 默认是跳转到首页,如果有next参数就跳转到next对应的地址
+                next_url = request.GET.get('next', reverse('goods:index'))
+
+                # 跳转到next_url
+                response = redirect(next_url)  # HttpResponseRedirect
 
                 # 设置cookie,需要通过HttpResponse类的实例对象,set_cookie
                 # HttpResponseRedirect JsonResponse
@@ -262,11 +271,153 @@ class LoginView(View):
             return render(request, 'login.html', {'errmsg': '用户名或密码错误或者账户未激活'})
 
 
+# /user/logout
+class LogoutView(View):
+    """退出登录"""
+
+    def get(self, request):
+        logout(request)
+        # 使用django内部的认证系统的退出功能,返回首页
+        return redirect(reverse('goods:index'))
+
+
+# /user
+# 继承LoginRequiredMixin,帮助验证登录才能访问的页面
+class UserInfoView(LoginRequiredMixin, View):
+    '''用户中心-信息页'''
+
+    def get(self, request):
+        '''显示'''
+        # page = 'user'
+        # request.user
+        # 如果用户未登录->返回Anonymous类的一个实例
+        # 如果用户登录->返回User类的一个实例
+        # request.user.is_authenticated() 验证用户
+
+        # 获取用户的个人信息
+        user = request.user  # 直接从request中获取
+        address = Address.objects.get_default_address(user)
+
+        # 获取用户的历史浏览记录
+        # 1.常规连接方法
+        # from redis import StrictRedis
+        # con = StrictRedis(host='127.0.0.1', port='6379', db=9)
+
+        # 2.推荐方法,default的意思就是配置文件里面的数据库链接的键名
+        con = get_redis_connection('default')
+
+        # 用户浏览历史记录id
+        history_key = 'history_%d' % user.id
+
+        # 获取用户最新浏览的5个商品的id
+        sku_ids = con.lrange(history_key, 0, 4)
+
+        # 从数据库中查询用户浏览的商品的具体信息,双下划线表示在里面的意思
+        # goods_li = GoodsSKU.objects.filter(id__in=sku_ids)
+        #
+        # # 注意这里的MySQL查询数据库的时候不是按照你给定顺序查询,而是从前向后遍历,是就拿出来
+        # # 1.通过两重循环查询
+        # goods_res = []
+        # for a_id in sku_ids:
+        #     for goods in goods_li:
+        #         if a_id == goods.id:
+        #             goods_res.append(goods)
+
+        # 2.遍历获取用户浏览的商品信息, 取一个遍历一个,再添加到列表里面去
+        goods_li = []
+        for id in  sku_ids:
+            goods = GoodsSKU.objects.get(id=id)
+            goods_li.append(goods)
+
+        # 组织上下文
+        context = {'page': 'user',
+                   'address': address,
+                   'goods_li':goods_li}
 
 
 
 
+        # 除了你给模板文件传递的模板变量之外,django框架会把request.user也传递给模板文件
+        return render(request, 'user_center_info.html', context)
 
 
+# /user/order
+class UserOrderView(LoginRequiredMixin, View):
+    '''用户中心-订单页'''
+
+    def get(self, request):
+        '''显示'''
+        # 获取用户的订单信息
+
+        return render(request, 'user_center_order.html', {'page': 'order'})
 
 
+# /user/address
+class AddressView(LoginRequiredMixin, View):
+    '''用户中心-地址页'''
+
+    def get(self, request):
+        '''显示'''
+        # 获取登录的用户对应的User对象
+        user = request.user
+
+        # 获取用户的默认收货地址
+        # try:
+        #     address = Address.objects.get(user=user, is_default=True)
+        # except Address.DoesNotExist:
+        #     # 不存在默认的收货地址
+        #     address = None
+        # 将上面的方法封装成为一个model中的AddressManager类,直接使用address调用即可
+        address = Address.objects.get_default_address(user)
+
+        # 使用模板
+        return render(request, 'user_center_site.html', {'page': 'address', 'address': address})
+
+    def post(self, request):
+        '''地址的添加'''
+        receiver = request.POST.get('receiver')
+        addr = request.POST.get('addr')
+        zip_code = request.POST.get('zip_code')
+        phone = request.POST.get('phone')
+
+        # 业务处理:地址添加
+        # 如果用户已经存在默认的收货地址,添加的地址不作为默认的收货地址,否则作为默认收货地址
+        # 获取登录用户的User对象, 能够访问到post方法的都是已经登录了的用户的了,存在request.user
+        user = request.user
+
+        # model里面设置默认是False,所以这里查询出来的是True
+        # try:
+        #     address = Address.objects.get(user=user, is_default=True)
+        # except Address.DoesNotExist:
+        #     # 如果不存在默认的收货地址,设置为None
+        #     address = None
+        # 将上面的方法封装成为一个model中的AddressManager类,直接使用address调用即可
+        address = Address.objects.get_default_address(user)
+
+        if address:
+            is_default = False
+        else:
+            is_default = True
+
+        # 数据校验, 邮编可以是为空,不做数据校验,因为在model里面已经定义默认为空
+        if not all([receiver, addr, phone]):
+            return render(request, 'user_center_site.html',
+                          {'page': 'address',
+                           'address': address,
+                           'errmsg': '数据不完整'})
+        # 校验手机号
+        if not re.match(r'^1([3-8][0-9]|5[189]|8[6789])[0-9]{8}$', phone):
+            return render(request, 'user_center_site.html',
+                          {'page': 'address',
+                           'address': address,
+                           'errmsg': '手机号格式不合法'})
+
+        # 添加收货地址, 设置默认的收货地址,其实可以扩展一下功能的
+        Address.objects.create(user=user,
+                               receiver=receiver,
+                               addr=addr,
+                               zip_code=zip_code,
+                               phone=phone,
+                               is_default=is_default)
+        # 反回应答,刷新地址页面
+        return redirect(reverse('user:address'))  # get请求方法
