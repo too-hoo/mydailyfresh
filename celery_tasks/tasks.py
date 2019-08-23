@@ -2,16 +2,16 @@
 # -*-encoding:UTF-8-*-
 from django.core.mail import send_mail
 from django.conf import settings
-
+from django.template import loader, RequestContext
 from celery import Celery
 import time
 
 # django 环境的初始化,在任务处理者worker一端需要加上下面几句
 import os
 import django
-
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mydailyfresh.settings')
 django.setup()
+from apps.goods.models import GoodsType, IndexGoodsBanner, IndexPromotionBanner, IndexTypeGoodsBanner
 
 # 名字是可以任意指定的,但是一般取个有意义的名字, broker是中间人
 app = Celery('celery_tasks.tasks', broker='redis://127.0.0.1:6379/8')
@@ -35,4 +35,50 @@ def send_register_active_email(to_email, username, token):
 
     # 前面的4个参数是按照顺序传递的,不能直接传入html_message,要设置一个参数来接收
     send_mail(subject, message, sender, receiver, html_message=html_message)
-    time.sleep(5)
+    # time.sleep(5)
+
+
+@app.task
+def generate_static_index_html():
+    '''产生首页静态页面'''
+    # 获取商品的种类信息
+    types = GoodsType.objects.all()
+
+    # 获取首页轮播商品信息
+    good_banners = IndexGoodsBanner.objects.all().order_by('index')
+
+    # 获取首页促销活动信息
+    promotion_banners = IndexPromotionBanner.objects.all().order_by('index')
+
+    # 获取首页分类商品展示信息
+    # 不能简单的将所有的信息都查询出来:type_good_banners = IndexTypeGoodsBanner.objects.all()
+    # 要分开查询
+    for type in types:
+        # 获取type种类首页分类的商品的图片展示信息
+        image_banners = IndexTypeGoodsBanner.objects.filter(type=type, display_type=1).order_by('index')
+        # 获取type种类首页分类商品的文字展示信息
+        title_banners = IndexTypeGoodsBanner.objects.filter(type=type, display_type=0).order_by('index')
+
+        # 动态给type增加属性, 分别保存首页分类商品的图片展示信息和文字展示信息
+        type.image_banners = image_banners
+        type.title_banners = title_banners
+
+    # 组织模板上下文
+    context = {'types': types,
+               'goods_banners': good_banners,
+               'promotion_banners': promotion_banners}
+
+    # 使用模板(原始)
+    # 1.加载模板文件,返回模板对象
+    temp = loader.get_template('static_index.html')
+    # 2.定义模板上下文 这步可以直接不写
+    # context = RequestContext(request, context)
+    # 3.模板渲染
+    static_index_html = temp.render(context)
+    print(static_index_html)
+
+    # 生成首页对应的静态文件
+    save_path = os.path.join(settings.BASE_DIR, 'static/index1.html')
+    print()
+    with open(save_path, 'w') as f:
+        f.write(static_index_html)

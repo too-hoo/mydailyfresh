@@ -4,7 +4,7 @@
 from django.core.files.storage import Storage
 from fdfs_client.client import Fdfs_client
 
-from mydailyfresh import settings
+from django.conf import settings
 
 
 class FDFSStorage(Storage):
@@ -30,7 +30,7 @@ class FDFSStorage(Storage):
         # content:包含你上传文件内容的File对象
 
         # 创建一个Fdfs_client对象
-        client = Fdfs_client(client_conf)
+        client = Fdfs_client(self.client_conf)
 
         # 上传文件到fast dfs系统中
         res = client.upload_appender_by_buffer(content.read())

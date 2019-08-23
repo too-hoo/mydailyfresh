@@ -80,6 +80,7 @@ class GoodsImage(BaseModel):
         verbose_name_plural = verbose_name
 
 
+# 下面是首页的控制展示的三个类
 class IndexGoodsBanner(BaseModel):
     """首页轮播商品展示模型类"""
     sku = models.ForeignKey('GoodsSKU', on_delete=models.CASCADE, verbose_name='商品')
@@ -97,6 +98,7 @@ class IndexGoodsBanner(BaseModel):
 
 class IndexTypeGoodsBanner(BaseModel):
     """首页分类商品展示模型类"""
+    # 指定商品的显示类型,使用数字限定
     DISPLAY_TYPE_CHOICES = (
         (0, '标题'),
         (1, '图片')
@@ -119,6 +121,8 @@ class IndexTypeGoodsBanner(BaseModel):
 class IndexPromotionBanner(BaseModel):
     """首页促销活动模型类"""
     name = models.CharField(max_length=20, verbose_name='活动名称')
+    # 图片的链接, URLField字段限定在后台添加链接的时候会默认校验,否则出错,
+    # 如果使用CharField的时候需要指定长度, 类似如果是图片的话会校验是否是一个有效的图片
     url = models.URLField(verbose_name='活动链接')
     image = models.ImageField(upload_to='banner', verbose_name='活动图片')
     index = models.SmallIntegerField(default=0, verbose_name='展示顺序')

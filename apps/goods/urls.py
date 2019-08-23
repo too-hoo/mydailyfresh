@@ -1,6 +1,7 @@
 from django.urls import path
-from apps.goods import views
+from apps.goods.views import indexView
+
 
 urlpatterns = [
-    path('', views.index, name='index'),  # 显示首页
+    path('',indexView.as_view(), name='index'),  # 显示首页
 ]
