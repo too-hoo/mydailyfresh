@@ -1,0 +1,3 @@
+pip install mutagen  # 处理媒体信息, Mutagen是用于处理音频元数据的python模块
+pip install requests # 需要请求模块
+pip install fdfs_client-py-master.zip
