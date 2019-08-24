@@ -53,8 +53,11 @@
 <div class="search_bar clearfix">
     <a href="/" class="logo fl"><img src="{% static 'images/logo.png' %}"></a>
     <div class="search_con fl">
-        <input type="text" class="input_text fl" name="" placeholder="搜索商品">
-        <input type="button" class="input_btn fr" name="" value="搜索">
+        {# 表单的method是固定的get, action可以任意指定, 输入框的name固定是q, button改为提交 #}
+        <form method="get" action="/search">
+        <input type="text" class="input_text fl" name="q" placeholder="搜索商品">
+        <input type="submit" class="input_btn fr" name="" value="搜索">
+        </form>
     </div>
     <div class="guest_cart fr">
         <a href="#" class="cart_name fl">我的购物车</a>
