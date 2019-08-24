@@ -24,13 +24,14 @@
 <div class="center_con clearfix">
     <ul class="subnav fl">
         {% for type in types %}
-        <li><a href="#model0{{ forloop.counter }}" class="{{ type.logo }}">{{ type.name }}</a></li>
+            <li><a href="#model0{{ forloop.counter }}" class="{{ type.logo }}">{{ type.name }}</a></li>
         {% endfor %}
     </ul>
     <div class="slide fl">
         <ul class="slide_pics">
-            {% for banner in goods_banners %}
-                <li><a href="#"><img src="{{ banner.image.url }}" alt="幻灯片"></a></li>
+            {# 商品的轮播 #}
+            {% for banner in index_banner %}
+                <li><a href="{% url 'goods:detail' banner.sku.id %}"><img src="{{ banner.image.url }}" alt="幻灯片"></a></li>
             {% endfor %}
         </ul>
         <div class="prev"></div>
@@ -38,7 +39,7 @@
         <ul class="points"></ul>
     </div>
     <div class="adv fl">
-        {% for banner in promotion_banners %}
+        {% for banner in promotion_banner %}
             <a href="{{ banner.url }}"><img src="{{ banner.image.url }}"></a>
         {% endfor %}
     </div>
@@ -50,9 +51,10 @@
         <h3 class="fl" id="model0{{ forloop.counter }}">{{ type.name }}</h3>
         <div class="subtitle fl">
             <span>|</span>
+            {# 种类文字信息跳转 #}
             {% for banner in type.title_banners %}
                 {# 都是 IndexTypeGoodsBanner对象,里面有一个sku外键属性,指向GoodsSKU类 #}
-                <a href="#">{{ banner.sku.name }}</a>
+                <a href="{% url 'goods:detail' banner.sku.id %}">{{ banner.sku.name }}</a>
             {% endfor %}
         </div>
         <a href="#" class="goods_more fr" id="fruit_more">查看更多 ></a>
@@ -61,10 +63,11 @@
     <div class="goods_con clearfix">
         <div class="goods_banner fl"><img src="{{ type.image.url }}"></div>
         <ul class="goods_list fl">
+            {# 具体商品的点击文字信息或者图片都可以跳转 #}
             {% for banner in type.image_banners %}
             <li>
-                <h4><a href="#">{{ banner.sku.name }}</a></h4>
-                <a href="#"><img src="{{ banner.sku.image.url }}"></a>
+                <h4><a href="{% url 'goods:detail' banner.sku.id %}">{{ banner.sku.name }}</a></h4>
+                <a href="{% url 'goods:detail' banner.sku.id %}"><img src="{{ banner.sku.image.url }}"></a>
                 <div class="prize">¥ {{ banner.sku.price }}</div>
             </li>
             {% endfor %}
