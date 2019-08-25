@@ -1,4 +1,5 @@
 {% extends 'base_detail_list.html' %}
+{% load staticfiles %}
 {% block title %}天天生鲜-商品详情{% endblock title %}
 
 {% block main_content %}
@@ -29,6 +30,9 @@
             </div>
         </div>
         <div>
+            <p>商品库存:&<b>{{ sku.stock }}</b></p>
+        </div>
+        <div>
             <p>其他规格</p>
             <ul>
                 {% for sku in same_spu_skus %}
@@ -38,8 +42,10 @@
         </div>
         <div class="total">总价：<em>16.80元</em></div>
         <div class="operate_btn">
+            {# 如果是在表单中的话, 表单会自动帮我们提交,但是这里我们需要自己获取再提交#}
+            {% csrf_token %}
             <a href="javascript:;" class="buy_btn">立即购买</a>
-            <a href="javascript:;" class="add_cart" id="add_cart">加入购物车</a>
+            <a href="javascript:;" class="add_cart" sku_id="{{ sku.id }}" id="add_cart">加入购物车</a>
         </div>
     </div>
 </div>
@@ -94,26 +100,97 @@
 {% endblock bottom %}
 
 {% block bottomfiles %}
-<script type="text/javascript" src="js/jquery-1.12.2.js"></script>
+<script type="text/javascript" src="{% static 'js/jquery-1.12.4.min.js' %}"></script>
 <script type="text/javascript">
+    update_sku_amount()
+    // 计算商品的小计
+    function update_sku_amount() {
+        // 获取商品的数量和价格
+        count = $('.num_show').val();
+        price = $('.show_pirze').children('em').text();
+        // 计算小计,字符串要转换成为浮点数和整数
+        amount = parseFloat(price) * parseInt(count);
+        // 设置商品的小计,toFixed()函数保存数量后面的两位小数,需要加上单位
+        $('.total').children('em').text(amount.toFixed(2)+'元');
+    }
+    // 商品数量增加
+    $('.add').click(function () {
+        // 获取商品的数量
+        count = $('.num_show').val();
+        // 增加1
+        count = parseInt(count)+1;
+        // 重新设置商品的数量
+        $('.num_show').val(count);
+
+        // 重新计算小计
+        update_sku_amount();
+    })
+    // 商品的数量减少
+    $('.minus').click(function () {
+        // 获取商品的数量
+        count = $('.num_show').val();
+        // 增加1
+        count = parseInt(count)-1;
+        // 校验商品的数量, 小于0的直接设置为1
+        if (count <= 0){
+            count = 1
+        }
+        // 重新设置商品的数量
+        $('.num_show').val(count);
+
+        // 重新计算小计
+        update_sku_amount();
+    })
+    // 手动输入,使用失去焦点的blur()函数
+    $('.num_show').blur(function () {
+        // 获取当前输入框的值
+        count = $(this).val();
+        // 校验count是否合法isNaN函数校验是否是数字, 不合法的值全部设置为1
+        if (isNaN(count)||count.trim().length == 0||parseInt(count)<=0){
+            count = 1;
+        }
+        // 转换成为整数是为了让用户合理购买
+        $('.num_show').val(parseInt(count));
+        update_sku_amount();
+    })
+
     var $add_x = $('#add_cart').offset().top;
     var $add_y = $('#add_cart').offset().left;
 
     var $to_x = $('#show_count').offset().top;
     var $to_y = $('#show_count').offset().left;
 
-    $(".add_jump").css({'left': $add_y + 80, 'top': $add_x + 10, 'display': 'block'})
+    // 这是添加到购物车的一个动画
     $('#add_cart').click(function () {
-        $(".add_jump").stop().animate({
-                'left': $to_y + 7,
-                'top': $to_x + 7
-            },
-            "fast", function () {
-                $(".add_jump").fadeOut('fast', function () {
-                    $('#show_count').html(2);
-                });
+        // 获取商品的id和商品的数量,attr()是获取自定义属性,获取一个html原有的属性使用prop
+        sku_id = $(this).attr('sku_id');
+        count = $('.num_show').val();
+        csrf = $('input[name="csrfmiddlewaretoken"]').val()
+        // alert(sku_id +":"+count);
+        // 组织参数
+        params = {'sku_id':sku_id, 'count':count, 'csrfmiddlewaretoken':csrf}
+        // 发起ajax post请求, 访问/cart/add, 传递参数:sku_id  count, 如果不加CSRF隐藏域 csrf_token 并获取传递验证会报错403
+        // data: 是返回的Ajax数据
+        $.post('/cart/add/', params, function (data) {
+            if (data.res == 5){
+                // 添加成功显示动画
+                $(".add_jump").css({'left': $add_y + 80, 'top': $add_x + 10, 'display': 'block'})
+                $(".add_jump").stop().animate({
+                    'left': $to_y + 7,
+                    'top': $to_x + 7},
+                    "fast", function () {
+                        $(".add_jump").fadeOut('fast', function () {
+                            $('#show_count').html(data.total_count);
+                        });
 
-            });
+                });
+            }else{
+                //添加失败,弹出提示框,必须使用data打点,才能显示出提示信息
+                alert(data.errmsg);
+            }
+        })
+
+
     })
 </script>
 {% endblock bottomfiles %}
