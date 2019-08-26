@@ -79,7 +79,9 @@ class OrderPlaceView(LoginRequiredMixin, View):
 
 
 # 前端传递的参数:地址idaddr_id, 支付方式pay_method 用户要购买的商品的id(sku_ids)
-class OrderCommitView(LoginRequiredMixin, View):
+# 加上了MySQL的事务:一组MySQL操作,要么都成功,要么都失败
+# 为了便于学习,这里设置为 OrderCommitView1
+class OrderCommitView1(LoginRequiredMixin, View):
     """订单创建"""
     @transaction.atomic   # 事务操作装饰
     def post(self, request):
@@ -193,6 +195,272 @@ class OrderCommitView(LoginRequiredMixin, View):
         return JsonResponse({'res':5, 'message':'创建成功'})
 
 
+# 前端传递的参数:地址idaddr_id, 支付方式pay_method 用户要购买的商品的id(sku_ids)
+# 加上了MySQL的事务:一组MySQL操作,要么都成功,要么都失败
+# 高并发:秒杀-----> 解法1:悲观锁 ; 解法2:乐观锁
+# 支付宝支付
+# 悲观锁解决实例:认为别人也会购买:一开始就加锁
+class OrderCommitView2(LoginRequiredMixin, View):
+    """订单创建"""
+    @transaction.atomic   # 事务操作装饰
+    def post(self, request):
+        '''订单创建'''
+        # 判断用户是否登录
+        user = request.user
+        if not user.is_authenticated:
+            # 用户未登录
+            return JsonResponse({'res':0, 'errmsg':'用户未登录'})
+
+        # 接收参数
+        addr_id = request.POST.get('addr_id')
+        pay_method = request.POST.get('pay_method')
+        sku_ids = request.POST.get('sku_ids')
+
+        # 校验参数
+        if not all([addr_id, pay_method, sku_ids]):
+            return JsonResponse({'res':1, 'errmsg':'参数不完整'})
+
+        # 校验支付方式
+        if pay_method not in OrderInfo.PAY_METHODS.keys():
+            return JsonResponse({'res':2, 'errmsg':'非法的支付方式'})
+
+        # 校验地址
+        try:
+            addr = Address.objects.get(id=addr_id)
+        except Address.DoesNotExist:
+            # 地址不存在
+            return JsonResponse({'res':3, 'errmsg':'地址非法'})
+
+        # todo: 创建订单的核心业务
+
+        # 组织参数:没有的参数搞出来
+        # 订单id: 201908261816+用户id
+        order_id = datetime.now().strftime('%Y%m%d%H%M%S') + str(user.id)
+
+        # 运费
+        transit_price = 10
+
+        # 总数目和总金额
+        total_count = 0
+        total_price = 0
+
+        # 设置事务的保存点
+        save_id = transaction.savepoint()
+
+        try:
+        # todo: 向df_order_info表中添加一条记录
+            order = OrderInfo.objects.create(order_id=order_id,
+                                     user=user,
+                                     addr=addr,
+                                     pay_method=pay_method,
+                                     total_count=total_count,
+                                     total_price=total_price,
+                                     transit_price=transit_price)
+
+            # todo: 用户的订单中有几个商品,就需要向df_order_goods表中添加几条记录
+            conn = get_redis_connection('default')
+            cart_key = 'cart_%d'%user.id
+
+            sku_ids = sku_ids.split(',')
+            for sku_id in sku_ids:
+                # 获取商品的信息
+                try:
+                    # mysql中加锁的sql: select * from df_goods_sku where id=sku_id for update;
+                    # 下面的查询需要做相应的更改,加上:select_for_update()
+                    sku = GoodsSKU.objects.select_for_update().get(id=sku_id)
+                except:
+                    # 商品不存在
+                    transaction.savepoint_rollback(save_id)  # 发生异常,数据库回滚
+                    return JsonResponse({'res':4, 'errmsg':'商品不存在'})
+
+                # 演示悲观锁:连个用户秒杀一个鸡腿, 一个用户先拿到锁,释放之后另一个才能拿到锁
+                # print('user:%d stock:%d'%(user.id, sku.stock))
+                # import time
+                # time.sleep(10)
+
+                # 从redis中获取用户所要购买的商品的数量
+                count = conn.hget(cart_key, sku_id)
+
+                # todo:判断商品的库存
+                if int(count) > sku.stock:
+                    transaction.savepoint_rollback(save_id)
+                    return JsonResponse({'res':6, 'errmsg':'商品库存不足'})
+
+                # todo:向df_order_goods表中添加一条记录
+                OrderGoods.objects.create(order=order,
+                                          sku=sku,
+                                          count=count,
+                                          price=sku.price)
+
+                # todo: 更新商品的库存和销量
+                sku.stock -= int(count)
+                sku.sales += int(count)
+                sku.save()
+
+                # todo: 累加更新计算订单商品的总数量和总价格
+                amount = sku.price*int(count)
+                total_count += int(count)
+                total_price += amount
+
+            # todo: 更新订单信息表中的商品的总数量和总价格
+            order.total_count = total_count
+            order.total_price = total_price
+            order.save()
+        except Exception as e:
+            transaction.savepoint_rollback(save_id)
+            return JsonResponse({'res':7, 'errmsg':'下单失败'})
+
+        # 数据操作都没有问题之后需要进行数据的提交
+        transaction.savepoint_commit(save_id)
+
+        # todo: 清除用户购物车中的对应的记录 [1,3], *号会将列表拆分
+        # print(*sku_ids) # 2 3
+        conn.hdel(cart_key, *sku_ids)
+
+        # 返回应答
+        return JsonResponse({'res':5, 'message':'创建成功'})
+
+
+# 前端传递的参数:地址idaddr_id, 支付方式pay_method 用户要购买的商品的id(sku_ids)
+# 加上了MySQL的事务:一组MySQL操作,要么都成功,要么都失败
+# 高并发:秒杀-----> 解法1:悲观锁 ; 解法2:乐观锁
+# 支付宝支付
+# 乐观锁解决实例:认为别人不会购买,只在更新的时候判断,不一致才更新失败,否则成功
+class OrderCommitView(LoginRequiredMixin, View):
+    """订单创建"""
+    @transaction.atomic   # 事务操作装饰
+    def post(self, request):
+        '''订单创建'''
+        # 判断用户是否登录
+        user = request.user
+        if not user.is_authenticated:
+            # 用户未登录
+            return JsonResponse({'res':0, 'errmsg':'用户未登录'})
+
+        # 接收参数
+        addr_id = request.POST.get('addr_id')
+        pay_method = request.POST.get('pay_method')
+        sku_ids = request.POST.get('sku_ids')
+
+        # 校验参数
+        if not all([addr_id, pay_method, sku_ids]):
+            return JsonResponse({'res':1, 'errmsg':'参数不完整'})
+
+        # 校验支付方式
+        if pay_method not in OrderInfo.PAY_METHODS.keys():
+            return JsonResponse({'res':2, 'errmsg':'非法的支付方式'})
+
+        # 校验地址
+        try:
+            addr = Address.objects.get(id=addr_id)
+        except Address.DoesNotExist:
+            # 地址不存在
+            return JsonResponse({'res':3, 'errmsg':'地址非法'})
+
+        # todo: 创建订单的核心业务
+
+        # 组织参数:没有的参数搞出来
+        # 订单id: 201908261816+用户id
+        order_id = datetime.now().strftime('%Y%m%d%H%M%S') + str(user.id)
+
+        # 运费
+        transit_price = 10
+
+        # 总数目和总金额
+        total_count = 0
+        total_price = 0
+
+        # 设置事务的保存点
+        save_id = transaction.savepoint()
+
+        try:
+        # todo: 向df_order_info表中添加一条记录
+            order = OrderInfo.objects.create(order_id=order_id,
+                                     user=user,
+                                     addr=addr,
+                                     pay_method=pay_method,
+                                     total_count=total_count,
+                                     total_price=total_price,
+                                     transit_price=transit_price)
+
+            # todo: 用户的订单中有几个商品,就需要向df_order_goods表中添加几条记录
+            conn = get_redis_connection('default')
+            cart_key = 'cart_%d'%user.id
+
+            sku_ids = sku_ids.split(',')
+            for sku_id in sku_ids:
+                # 防止乐观锁判断购买一次失败,但是库存还有商品失败,所以尝试3次
+                for i in range(3):
+                    # 获取商品的信息
+                    try:
+                        sku = GoodsSKU.objects.get(id=sku_id)
+                    except:
+                        # 商品不存在
+                        transaction.savepoint_rollback(save_id)  # 发生异常,数据库回滚
+                        return JsonResponse({'res':4, 'errmsg':'商品不存在'})
+
+
+                    # 从redis中获取用户所要购买的商品的数量
+                    count = conn.hget(cart_key, sku_id)
+
+                    # todo:判断商品的库存
+                    if int(count) > sku.stock:
+                        transaction.savepoint_rollback(save_id)
+                        return JsonResponse({'res':6, 'errmsg':'商品库存不足'})
+
+                    # todo: 更新商品的库存和销量
+                    origin_stock = sku.stock
+                    new_stock = origin_stock - int(count)
+                    new_sales = sku.sales + int(count)   # 注意这里是数据库中的数据更新的
+
+                    # 演示悲观锁:连个用户秒杀一个鸡腿, 一个用户先拿到锁,释放之后另一个才能拿到锁
+                    print('user:%d times:%d stock:%d'%(user.id, i, sku.stock))
+                    import time
+                    time.sleep(10)
+
+                    # update df_goods_sku set stock=new_stock, sales=new_sales
+                    # where id=sku_id and stock = origin_stock
+                    # 意思就是判断更新的库存是否和原始库存一致的
+                    # 返回一个整数:受影响的行数, 现在只操作一行,要么返回1,要么返回0,返回0就更新失败
+                    res = GoodsSKU.objects.filter(id=sku_id, stock=origin_stock).update(stock=new_stock, sales=new_sales)
+                    if res == 0:
+                        if i==2:
+                            # 尝试第三次下单失败才是真正返回下单失败, 否则继续判断
+                            transaction.savepoint_rollback(save_id)
+                            return JsonResponse({'res':7, 'errmsg':'下单失败2'})
+                        continue
+
+                    # todo:向df_order_goods表中添加一条记录
+                    OrderGoods.objects.create(order=order,
+                                              sku=sku,
+                                              count=count,
+                                              price=sku.price)
+
+                    # todo: 累加更新计算订单商品的总数量和总价格
+                    amount = sku.price*int(count)
+                    total_count += int(count)
+                    total_price += amount
+
+                    # 一次成功就跳出循环
+                    break
+
+            # todo: 更新订单信息表中的商品的总数量和总价格
+            order.total_count = total_count
+            order.total_price = total_price
+            order.save()
+        except Exception as e:
+            transaction.savepoint_rollback(save_id)
+            return JsonResponse({'res':7, 'errmsg':'下单失败'})
+
+        # 数据操作都没有问题之后需要进行数据的提交
+        transaction.savepoint_commit(save_id)
+
+        # todo: 清除用户购物车中的对应的记录 [1,3], *号会将列表拆分
+        # print(*sku_ids) # 2 3
+        conn.hdel(cart_key, *sku_ids)
+
+        # 返回应答
+        return JsonResponse({'res':5, 'message':'创建成功'})
 
 
 
