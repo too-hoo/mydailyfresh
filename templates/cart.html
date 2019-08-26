@@ -13,9 +13,12 @@
     <li class="col06">操作</li>
 </ul>
 
+{# 也可以使用反向解析 #}
+<form method="post" action="{% url 'order:place' %}">
+{# 复选框中的选中的项目的id会随着点击而提交 #}
 {% for sku in skus %}
 <ul class="cart_list_td clearfix">
-    <li class="col01"><input type="checkbox" name="" checked></li>
+    <li class="col01"><input type="checkbox" name="sku_ids" value="{{ sku.id }}" checked></li>
     <li class="col02"><img src="{{ sku.image.url }}"></li>
     <li class="col03">{{ sku.name }}<br><em>{{ sku.price }}元/{{ sku.unite }}</em></li>
     <li class="col04">{{ sku.unite }}</li>
@@ -37,8 +40,9 @@
     <li class="col01"><input type="checkbox" name="" checked=""></li>
     <li class="col02">全选</li>
     <li class="col03">合计(不含运费)：<span>¥</span><em>{{ total_price }}</em><br>共计<b>{{ total_count }}</b>件商品</li>
-    <li class="col04"><a href="place_order.html">去结算</a></li>
+    <li class="col04"><input type="submit" value="去结算"></li>
 </ul>
+</form>
 {% endblock body %}
 
 {% block bottomfiles %}
@@ -304,8 +308,6 @@
                     alert(data.errmsg)
                 }
             })
-
-
         })
     </script>
 {% endblock bottomfiles %}
