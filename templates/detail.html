@@ -28,11 +28,9 @@
                 <a href="javascript:;" class="add fr">+</a>
                 <a href="javascript:;" class="minus fr">-</a>
             </div>
-        </div>
-        <div>
-            <p>商品库存:&<b>{{ sku.stock }}</b></p>
-        </div>
-        <div>
+            <div class="num_name fl">&nbsp;&nbsp;&nbsp;商品库存:</div>
+            <div class="num_name fl"><em>{{ sku.stock }}</em></div>
+
             <p>其他规格</p>
             <ul>
                 {% for sku in same_spu_skus %}

@@ -97,28 +97,22 @@
         $.post('/order/commit/', params, function (data) {
             if (data.res == 5){
                 // 创建成功
-                alert('创建成功!')
+                //alert('创建成功!')
+                localStorage.setItem('order_finish', 2);
+                // 提交订单成功的一个弹窗,3秒钟之后跳转到用户中心的订单页面
+                $('.popup_con').fadeIn('fast', function () {
+
+                    setTimeout(function () {
+                        $('.popup_con').fadeOut('fast', function () {
+                            window.location.href = '/user/order/1'; //设置默认跳到第一页, orderView中设置最新提交的订单放到第一页
+                        });
+                    }, 3000)
+                });
             }
             else {
                 alert(data.errmsg)
             }
         })
-
-
-
-
-
-
-        {#localStorage.setItem('order_finish', 2);#}
-        {##}
-        {#$('.popup_con').fadeIn('fast', function () {#}
-        {##}
-        {#    setTimeout(function () {#}
-        {#        $('.popup_con').fadeOut('fast', function () {#}
-        {#            window.location.href = 'index.html';#}
-        {#        });#}
-        {#    }, 3000)#}
-        {#});#}
     });
 </script>
 {% endblock bottomfiles %}

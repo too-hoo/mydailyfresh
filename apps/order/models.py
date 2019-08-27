@@ -17,6 +17,7 @@ class OrderInfo(BaseModel):
         "ALIPAY": 2
     }
 
+    # 应该更改成为一个字典来取值
     ORDER_STATUS = {
         1: '待支付',
         2: '待发货',
