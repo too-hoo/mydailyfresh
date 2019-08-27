@@ -25,5 +25,5 @@ urlpatterns = [
     path('cart/', include(('cart.urls', 'cart'), namespace='cart')),  # 购物车模块
     path('order/', include(('order.urls','order'), namespace='order')),  # 订单模块
     # 一开始就要跳转到首页去显示
-    path('', include(('goods.urls','goods'), namespace='goods')),  # 商品模块
+    path('index/', include(('goods.urls','goods'), namespace='goods')),  # 商品模块
 ]

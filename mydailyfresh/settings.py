@@ -26,9 +26,9 @@ sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
 SECRET_KEY = 'wn^kwfb9vqpo*_2-hil=rel1qh2lidu-y8uf*zqz=5-f5um)o7'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -137,7 +137,8 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')] # 设置静态文件路径
-
+# 指定收集静态文件的路径
+STATIC_ROOT = '/var/www/mydailyfresh/static'
 
 # 富文本编辑器配置：设置出主题颜色和宽高
 TINYMCE_DEFAULT_CONFIG = {
