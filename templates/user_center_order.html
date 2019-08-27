@@ -27,7 +27,7 @@
                 {# 使用过滤器加上运费得到商品的总价 #}
                 <td width="15%">{{ order.total_price|add:order.transit_price }}(含运费:{{ order.transit_price }})元</td>
                 <td width="15%">{{ order.status_name }}</td>
-                <td width="15%"><a href="#" order_id="{{ order.order_id }}" status="{{ order.order_status }}" class="oper_btn">去付款</a></td>
+                <td width="15%"><a href="javascript:;" order_id="{{ order.order_id }}" status="{{ order.order_status }}" class="oper_btn">去付款</a></td>
             </tr>
             </tbody>
         </table>
@@ -54,13 +54,27 @@
 {% block bottomfiles %}
     <script src="{% static 'js/jquery-1.12.4.min.js' %}"></script>
     <script>
-    $('.oper_btn').click(function () {
+    $('.oper_btn').each(function () {
         // 获取status
         status = $(this).attr('status')
         if (status == 1){
+            $(this).text('去支付')
+        }
+        else if (status == 4){
+            $(this).text('去评价')
+        }
+        else if (status == 5){
+            $(this).text('已完成')
+        }
+    })
+
+    $('.oper_btn').click(function () {
+        // 获取status
+        status = $(this).attr('status')
+        order_id = $(this).attr('order_id')
+        if (status == 1){
             // 进行支付
             // 获取订单id
-            order_id = $(this).attr('order_id')
             csrf = $('input[name="csrfmiddlewaretoken"]').val()
             // 组织参数
             params = {'order_id':order_id, 'csrfmiddlewaretoken':csrf}
@@ -87,10 +101,11 @@
                     alert(data.errmsg)
                 }
             })
-
         }
-        else{
+        else if (status == 4){
             // 其他请求
+            // 跳转到评价页面
+            location.href = "/order/comment/" + order_id
         }
     })
     </script>

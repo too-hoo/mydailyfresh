@@ -66,11 +66,11 @@
 
     <div class="r_wrap fr clearfix">
         <ul class="detail_tab clearfix">
-            <li class="active">商品介绍</li>
-            <li>评论</li>
+            <li class="active" id="tag_detail">商品介绍</li>
+            <li id="tag_comment">评论</li>
         </ul>
 
-        <div class="tab_content">
+        <div class="tab_content" id="tab_detail">
             <dl>
                 <dt>商品详情：</dt>
                 {# 富文本类型关闭转义,使用|safe, 也可以使用 autoescape on #}
@@ -79,12 +79,15 @@
                 <dd>{{ sku.goods.detail|safe }}</dd>
             </dl>
         </div>
-         <div class="tab_content">
+        {# 默认隐藏内容 style="display: none;"#}
+         <div class="tab_content" id="tab_comment" style="display: none;">
             {# 显示评论内容, 一级一级地找上去order.order.user.username #}
             <dl>
                 {% for order in sku_orders %}
-                <dt>评论时间：{{ order.update_time }}&nbsp;&nbsp;用户名:{{ order.order.user.username }}</dt>
-                <dd>{{ order.comment }}</dd>
+                    <dt>评论时间：{{ order.update_time }}&nbsp;&nbsp;用户名:{{ order.order.user.username }}</dt>
+                    <dd>评论内容:{{ order.comment }}</dd>
+                {% empty %}
+                    <dt>暂时没有评论信息</dt>
                 {% endfor %}
             </dl>
         </div>
@@ -100,6 +103,21 @@
 {% block bottomfiles %}
 <script type="text/javascript" src="{% static 'js/jquery-1.12.4.min.js' %}"></script>
 <script type="text/javascript">
+    // 商品的介绍与评论tag的切换
+    $('#tag_detail').click(function () {
+        $('#tag_comment').removeClass('active') // 控制高亮 点击一下去掉评论的显示的active
+        $(this).addClass('active')
+        $('#tab_detail').show() // 控制内容显示
+        $('#tab_comment').hide()
+    })
+
+    $('#tag_comment').click(function () {
+        $('#tag_detail').removeClass('active') // 点击一下去掉评论的显示的active
+        $(this).addClass('active')
+        $('#tab_comment').show()
+        $('#tab_detail').hide()
+    })
+
     update_sku_amount()
     // 计算商品的小计
     function update_sku_amount() {
